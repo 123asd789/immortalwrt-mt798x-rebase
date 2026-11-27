@@ -77,8 +77,8 @@ jobs:
           grep -q "^CONFIG_TARGET_mediatek_filogic_DEVICE_qihoo_360t7-uboot=y$" .config
           grep -q "^CONFIG_MTK_MT_AP_SUPPORT=m$" .config
           grep -q "^CONFIG_MTK_MT_WIFI=m$" .config
-          grep -q "^CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7673=y$" .config \
-            || { echo "MT_WIFI_DRIVER_VERSION_7673 未选中"; exit 1; }
+          grep -q "^CONFIG_MTK_MT_WIFI_DRIVER_VERSION_7672=y$" .config \
+            || { echo "MT_WIFI_DRIVER_VERSION_7672 未选中"; exit 1; }
           grep -q "^CONFIG_PACKAGE_kmod-mediatek_hnat=y$" .config
           grep -q "^CONFIG_PACKAGE_kmod-mt_wifi=y$" .config
 
