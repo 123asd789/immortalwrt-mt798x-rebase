@@ -1,0 +1,131 @@
+name: Build 360T7 (mtwifi + HNAT, U-Boot layout)
+
+on:
+  workflow_dispatch:
+    inputs:
+      extra_packages:
+        description: "额外软件包（空格分隔）"
+        type: string
+        default: ""
+  schedule:
+    - cron: "0 18 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-360t7
+  cancel-in-progress: false
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 350
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo docker image prune -af || true
+          df -h /
+
+      - name: Update feeds
+        run: |
+          set -euo pipefail
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+
+      - name: Prepare config
+        env:
+          EXTRA: ${{ inputs.extra_packages || '' }}
+        run: |
+          set -euo pipefail
+          cp configs/360t7-uboot-108m.config .config
+          sed -i -e '/^CONFIG_TARGET_PROFILE=/d' \
+                 -e '/^CONFIG_TARGET_mediatek_filogic_DEVICE_/d' \
+                 -e '/^# CONFIG_TARGET_mediatek_filogic_DEVICE_/d' .config
+          {
+            echo "CONFIG_TARGET_mediatek=y"
+            echo "CONFIG_TARGET_mediatek_filogic=y"
+            echo "CONFIG_TARGET_mediatek_filogic_DEVICE_qihoo_360t7-uboot=y"
+            echo 'CONFIG_TARGET_PROFILE="DEVICE_qihoo_360t7-uboot"'
+          } >> .config
+          for opt in \
+            CONFIG_PACKAGE_kmod-mt_wifi \
+            CONFIG_MTK_FIRST_IF_MT7981 \
+            CONFIG_MTK_CHIP_MT7981 \
+            CONFIG_PACKAGE_kmod-conninfra \
+            CONFIG_MTK_CONNINFRA_APSOC \
+            CONFIG_MTK_CONNINFRA_APSOC_MT7981 \
+            CONFIG_CONNINFRA_AUTO_UP \
+            CONFIG_PACKAGE_mtwifi-cfg-ucode \
+            CONFIG_PACKAGE_luci-app-mtwifi-cfg \
+            CONFIG_PACKAGE_kmod-mediatek_hnat \
+            CONFIG_PACKAGE_kmod-ipt-nat; do
+            echo "${opt}=y" >> .config
+          done
+          for pkg in ${EXTRA}; do
+            echo "CONFIG_PACKAGE_${pkg}=y" >> .config
+          done
+          make defconfig
+          cat configs/mtwifi-mt7981.config >> .config
+          grep -q "^CONFIG_TARGET_mediatek_filogic_DEVICE_qihoo_360t7-uboot=y$" .config
+          grep -q "^CONFIG_MTK_MT_AP_SUPPORT=m$" .config
+          grep -q "^CONFIG_MTK_MT_WIFI=m$" .config
+          grep -q "^CONFIG_PACKAGE_kmod-mediatek_hnat=y$" .config
+          grep -q "^CONFIG_PACKAGE_kmod-mt_wifi=y$" .config
+
+      - name: Download sources
+        run: |
+          set -euo pipefail
+          make -j"$(nproc)" download || make -j1 download
+
+      - name: Compile
+        run: |
+          set -euo pipefail
+          make -j"$(nproc)" 2>&1 | tee build.log
+
+      - name: Show error tail
+        if: failure()
+        run: tail -n 200 build.log || true
+
+      - name: Collect
+        run: |
+          set -euo pipefail
+          cd bin/targets/mediatek/filogic
+          rm -rf packages
+          sha256sum *.bin *.itb *.fip *.manifest profiles.json 2>/dev/null > SHA256SUMS || true
+          ls -lh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: immortalwrt-360t7-mtwifi-hnat-${{ github.run_number }}
+          path: bin/targets/mediatek/filogic/*
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Create release
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="build-$(date +%Y%m%d)-${GITHUB_RUN_NUMBER}"
+          NOTES="$RUNNER_TEMP/notes.md"
+          cat > "$NOTES" <<'EOF'
+          ## 360T7 (MT7981B) mtwifi + HNAT 固件
+
+          - 布局：108M 自定义 U-Boot（factory.bin / sysupgrade.bin）
+          - 无线：MTK 私有 mt_wifi 驱动 + mtwifi-cfg-ucode
+          - 加速：MTK HNAT（kmod-mediatek_hnat + warp + conninfra）
+          EOF
+          cd bin/targets/mediatek/filogic
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --title "360T7 mtwifi+HNAT $(date +%Y%m%d) #${GITHUB_RUN_NUMBER}" \
+            --notes-file "$NOTES" ./*.bin ./*.itb ./*.fip ./*.manifest ./profiles.json ./SHA256SUMS ./*.buildinfo
