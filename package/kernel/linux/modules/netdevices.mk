@@ -2363,10 +2363,11 @@ $(eval $(call KernelPackage,mtk-t7xx))
 define KernelPackage/mediatek_hnat
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Mediatek HNAT module
-  DEPENDS:=@TARGET_mediatek +kmod-nf-conntrack
+  DEPENDS:=@TARGET_mediatek +kmod-nf-conntrack +kmod-ipt-nat +wireless-tools +@KERNEL_WIRELESS_EXT
   KCONFIG:= \
 	CONFIG_BRIDGE_NETFILTER=y \
 	CONFIG_NETFILTER_FAMILY_BRIDGE=y \
+	CONFIG_MEDIATEK_NETSYS_V2=y \
 	CONFIG_NET_MEDIATEK_HNAT
   FILES:= \
         $(LINUX_DIR)/drivers/net/ethernet/mediatek/mtk_hnat/mtkhnat.ko
