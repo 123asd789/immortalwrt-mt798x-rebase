@@ -4145,3 +4145,25 @@ ifneq ($(CONFIG_TARGET_ROOTFS_INITRAMFS),)
 endif
 endef
 TARGET_DEVICES += zyxel_wx5600-t0-ubootmod
+
+define Device/qihoo_360t7-uboot
+  DEVICE_VENDOR := Qihoo
+  DEVICE_MODEL := 360T7
+  DEVICE_VARIANT := (U-Boot layout)
+  DEVICE_DTS := mt7981b-qihoo-360t7-uboot
+  DEVICE_DTS_DIR := ../dts
+  SUPPORTED_DEVICES += qihoo,360t7-uboot 360,t7
+  UBINIZE_OPTS := -E 5
+  BLOCKSIZE := 128k
+  PAGESIZE := 2048
+  IMAGE_SIZE := 110592k
+  KERNEL_IN_UBI := 1
+  IMAGES := sysupgrade.bin factory.bin
+  KERNEL = kernel-bin | lzma | \
+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
+  KERNEL_INITRAMFS = kernel-bin | lzma | \
+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd
+  IMAGE/factory.bin := append-ubi | check-size $$$$(IMAGE_SIZE)
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
+endef
+TARGET_DEVICES += qihoo_360t7-uboot
