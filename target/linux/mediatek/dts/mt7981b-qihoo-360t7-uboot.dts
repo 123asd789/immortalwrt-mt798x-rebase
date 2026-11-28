@@ -272,9 +272,3 @@
 	mtkdsa-wan-port = <3>;
 	ext-devices-prefix = "wwan", "usb", "eth";
 };
-
-&wifi {
-	status = "okay";
-
-	mediatek,mtd-eeprom = <&factory 0x0>;
-};
